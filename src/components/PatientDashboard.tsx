@@ -3,7 +3,7 @@ import {
   Activity, 
   Droplets, 
   Baby,
-  Edit3
+  Edit3,
   Zap
   ChefHat, 
   Phone, 
