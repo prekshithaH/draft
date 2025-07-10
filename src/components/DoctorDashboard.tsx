@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   MessageSquare, 
@@ -24,63 +24,104 @@ interface DoctorDashboardProps {
 const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
 
-  const mockPatients = [
-    {
-      id: '1',
-      name: 'Sarah Johnson',
-      age: 28,
-      week: 24,
-      dueDate: '2024-08-15',
-      status: 'normal',
-      lastVisit: '2024-01-15',
-      avatar: 'SJ'
-    },
-    {
-      id: '2',
-      name: 'Emily Davis',
-      age: 32,
-      week: 18,
-      dueDate: '2024-10-20',
-      status: 'attention',
-      lastVisit: '2024-01-10',
-      avatar: 'ED'
-    },
-    {
-      id: '3',
-      name: 'Jessica Wilson',
-      age: 29,
-      week: 36,
-      dueDate: '2024-06-05',
-      status: 'critical',
-      lastVisit: '2024-01-12',
-      avatar: 'JW'
-    }
-  ];
+  // Load real patients and notifications
+  useEffect(() => {
+    const loadPatientsAndNotifications = () => {
+      // Load all registered users and filter patients assigned to Dr. Rajesh
+      const registeredUsers = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+      const assignedPatients = registeredUsers.filter((user: any) => 
+        user.role === 'patient' && user.doctorId === 'dr_rajesh'
+      );
+      
+      // Transform patient data for display
+      const transformedPatients = assignedPatients.map((patient: any) => ({
+        id: patient.id,
+        name: patient.name,
+        age: calculateAge(patient.dueDate),
+        week: patient.currentWeek || 0,
+        dueDate: patient.dueDate || 'Not set',
+        status: determinePatientStatus(patient),
+        lastVisit: getLastVisit(patient),
+        avatar: patient.name.split(' ').map((n: string) => n[0]).join('').toUpperCase(),
+        email: patient.email,
+        healthRecords: patient.healthRecords || []
+      }));
+      
+      setPatients(transformedPatients);
+      
+      // Load notifications
+      const doctorNotifications = JSON.parse(localStorage.getItem('doctorNotifications') || '[]');
+      setNotifications(doctorNotifications.slice(0, 5)); // Show latest 5
+    };
 
-  const mockAlerts = [
-    {
-      id: '1',
-      patientName: 'Sarah Johnson',
-      message: 'High blood pressure reading: 145/95',
-      time: '2 hours ago',
-      type: 'warning'
-    },
-    {
-      id: '2',
-      patientName: 'Emily Davis',
-      message: 'Missed weekly check-in',
-      time: '1 day ago',
-      type: 'info'
-    },
-    {
-      id: '3',
-      patientName: 'Jessica Wilson',
-      message: 'Emergency contact requested',
-      time: '3 hours ago',
-      type: 'urgent'
+    loadPatientsAndNotifications();
+    
+    // Set up interval to refresh data every 30 seconds
+    const interval = setInterval(loadPatientsAndNotifications, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const calculateAge = (dueDate: string) => {
+    if (!dueDate) return 28; // Default age
+    // Calculate approximate age based on due date (assuming average pregnancy age)
+    return 28; // Simplified for demo
+  };
+
+  const determinePatientStatus = (patient: any) => {
+    const healthRecords = patient.healthRecords || [];
+    if (healthRecords.length === 0) return 'attention';
+    
+    // Check latest blood pressure reading
+    const latestBP = healthRecords
+      .filter((r: any) => r.type === 'blood_pressure')
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    
+    if (latestBP) {
+      const { systolic, diastolic } = latestBP.data;
+      if (systolic > 140 || diastolic > 90) return 'critical';
+      if (systolic > 130 || diastolic > 85) return 'attention';
     }
-  ];
+    
+    return 'normal';
+  };
+
+  const getLastVisit = (patient: any) => {
+    const healthRecords = patient.healthRecords || [];
+    if (healthRecords.length === 0) return 'No records';
+    
+    const latestRecord = healthRecords
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    
+    return new Date(latestRecord.date).toLocaleDateString();
+  };
+
+  const markNotificationAsRead = (notificationId: string) => {
+    const updatedNotifications = notifications.map(notif => 
+      notif.id === notificationId ? { ...notif, read: true } : notif
+    );
+    setNotifications(updatedNotifications);
+    
+    // Update in localStorage
+    const allNotifications = JSON.parse(localStorage.getItem('doctorNotifications') || '[]');
+    const updatedAllNotifications = allNotifications.map((notif: any) => 
+      notif.id === notificationId ? { ...notif, read: true } : notif
+    );
+    localStorage.setItem('doctorNotifications', JSON.stringify(updatedAllNotifications));
+  };
+
+  const getTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+    return `${Math.floor(diffInMinutes / 1440)} days ago`;
+  };
 
   const renderOverview = () => (
     <div className="space-y-6">
@@ -90,7 +131,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Patients</p>
-              <p className="text-2xl font-bold text-gray-800">24</p>
+              <p className="text-2xl font-bold text-gray-800">{patients.length}</p>
             </div>
             <Users className="w-8 h-8 text-blue-500" />
           </div>
@@ -100,7 +141,12 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">This Week</p>
-              <p className="text-2xl font-bold text-gray-800">12</p>
+              <p className="text-2xl font-bold text-gray-800">{patients.filter(p => p.healthRecords.some((r: any) => {
+                const recordDate = new Date(r.date);
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                return recordDate > weekAgo;
+              })).length}</p>
             </div>
             <Calendar className="w-8 h-8 text-green-500" />
           </div>
@@ -110,7 +156,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Urgent Cases</p>
-              <p className="text-2xl font-bold text-gray-800">3</p>
+              <p className="text-2xl font-bold text-gray-800">{patients.filter(p => p.status === 'critical').length}</p>
             </div>
             <AlertCircle className="w-8 h-8 text-red-500" />
           </div>
@@ -120,7 +166,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Messages</p>
-              <p className="text-2xl font-bold text-gray-800">8</p>
+              <p className="text-2xl font-bold text-gray-800">{notifications.filter(n => !n.read).length}</p>
             </div>
             <MessageSquare className="w-8 h-8 text-purple-500" />
           </div>
@@ -135,19 +181,31 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
         </div>
         
         <div className="space-y-3">
-          {mockAlerts.map((alert) => (
-            <div key={alert.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+          {notifications.slice(0, 3).map((notification) => (
+            <div 
+              key={notification.id} 
+              className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                notification.read ? 'bg-gray-50' : 'bg-blue-50 border border-blue-200'
+              }`}
+              onClick={() => markNotificationAsRead(notification.id)}
+            >
               <div className={`w-2 h-2 rounded-full ${
-                alert.type === 'urgent' ? 'bg-red-500' : 
-                alert.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                notification.type === 'urgent' ? 'bg-red-500' : 
+                notification.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
               }`} />
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-800">{alert.patientName}</p>
-                <p className="text-xs text-gray-600">{alert.message}</p>
+                <p className="text-sm font-medium text-gray-800">{notification.patientName}</p>
+                <p className="text-xs text-gray-600">{notification.message}</p>
               </div>
-              <span className="text-xs text-gray-500">{alert.time}</span>
+              <span className="text-xs text-gray-500">{getTimeAgo(notification.timestamp)}</span>
             </div>
           ))}
+          
+          {notifications.length === 0 && (
+            <div className="text-center py-4">
+              <p className="text-sm text-gray-500">No recent alerts</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -164,7 +222,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
         </div>
         
         <div className="space-y-3">
-          {mockPatients.slice(0, 3).map((patient) => (
+          {patients.slice(0, 3).map((patient) => (
             <div key={patient.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
@@ -216,7 +274,7 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
 
       {/* Patient Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {mockPatients.map((patient) => (
+        {patients.map((patient) => (
           <div key={patient.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
@@ -269,6 +327,14 @@ const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ doctor }) => {
           </div>
         ))}
       </div>
+      
+      {patients.length === 0 && (
+        <div className="text-center py-12">
+          <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">No patients assigned yet</h3>
+          <p className="text-gray-600">Patients will appear here when they register and are assigned to you.</p>
+        </div>
+      )}
     </div>
   );
 
