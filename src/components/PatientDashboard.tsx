@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState , useEffect} from 'react';
 import { 
   Activity, 
   Droplets, 
-  Baby, 
+  Baby,
+  Edit3
+  Zap
   ChefHat, 
   Phone, 
   MessageCircle, 
@@ -17,7 +19,7 @@ import {
   Save,
   X
 } from 'lucide-react';
-import { Patient, HealthRecord, BloodPressureData, SugarLevelData, BabyMovementData } from '../types';
+import { Patient, HealthRecord, BloodPressureData, SugarLevelData, BabyMovementData, WeeklyUpdateData } from '../types';
 
 interface PatientDashboardProps {
   patient: Patient;
@@ -26,102 +28,11 @@ interface PatientDashboardProps {
 const PatientDashboard: React.FC<PatientDashboardProps> = ({ patient }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showAddForm, setShowAddForm] = useState(false);
-  
+  const [recordType, setRecordType] = useState<'blood_pressure' | 'sugar_level' | 'baby_movement' | 'weekly_update'>('blood_pressure');
+  const [healthRecords, setHealthRecords] = useState<HealthRecord[]>(patient.healthRecords || []);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   // Mock health records for demonstration
-  const mockHealthRecords: HealthRecord[] = [
-    {
-      id: 'mock-1',
-      patientId: patient.id,
-      date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-      type: 'blood_pressure',
-      data: {
-        systolic: 118,
-        diastolic: 78,
-        heartRate: 72,
-        notes: 'Morning reading after breakfast'
-      }
-    },
-    {
-      id: 'mock-2',
-      patientId: patient.id,
-      date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-      type: 'sugar_level',
-      data: {
-        level: 95,
-        testType: 'fasting',
-        notes: 'Fasting reading before breakfast'
-      }
-    },
-    {
-      id: 'mock-3',
-      patientId: patient.id,
-      date: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
-      type: 'baby_movement',
-      data: {
-        count: 12,
-        duration: 45,
-        notes: 'Very active after lunch, strong kicks'
-      }
-    },
-    {
-      id: 'mock-4',
-      patientId: patient.id,
-      date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 days ago
-      type: 'blood_pressure',
-      data: {
-        systolic: 122,
-        diastolic: 82,
-        heartRate: 75,
-        notes: 'Evening reading, felt a bit tired'
-      }
-    },
-    {
-      id: 'mock-5',
-      patientId: patient.id,
-      date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-      type: 'sugar_level',
-      data: {
-        level: 140,
-        testType: 'post_meal',
-        notes: '2 hours after dinner'
-      }
-    },
-    {
-      id: 'mock-6',
-      patientId: patient.id,
-      date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
-      type: 'baby_movement',
-      data: {
-        count: 8,
-        duration: 30,
-        notes: 'Gentle movements during rest time'
-      }
-    },
-    {
-      id: 'mock-7',
-      patientId: patient.id,
-      date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
-      type: 'blood_pressure',
-      data: {
-        systolic: 115,
-        diastolic: 75,
-        heartRate: 68,
-        notes: 'Good reading after morning walk'
-      }
-    },
-    {
-      id: 'mock-8',
-      patientId: patient.id,
-      date: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(), // 8 days ago
-      type: 'sugar_level',
-      data: {
-        level: 88,
-        testType: 'random',
-        notes: 'Mid-afternoon check'
-      }
-    }
-  ];
-
+  
   const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([
     ...mockHealthRecords,
     ...(patient.healthRecords || [])
@@ -146,13 +57,125 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ patient }) => {
     notes: ''
   });
 
+    const [weeklyUpdateForm, setWeeklyUpdateForm] = useState({
+    weight: '',
+    symptoms: [] as string[],
+    mood: 5,
+    notes: ''
+  });
+
   const [nutritionForm, setNutritionForm] = useState({
     meal: '',
     foods: '',
     calories: '',
     notes: ''
   });
+  // Load health records from localStorage on component mount
+  useEffect(() => {
+    const storedRecords = localStorage.getItem(`healthRecords_${patient.id}`);
+    if (storedRecords) {
+      setHealthRecords(JSON.parse(storedRecords));
+    }
+  }, [patient.id]);
 
+  // Save health records to localStorage and notify doctor
+  const saveHealthRecords = (records: HealthRecord[]) => {
+    localStorage.setItem(`healthRecords_${patient.id}`, JSON.stringify(records));
+    
+    // Update patient's health records in user data
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    if (currentUser.id === patient.id) {
+      currentUser.healthRecords = records;
+      localStorage.setItem('user', JSON.stringify(currentUser));
+    }
+
+    // Update in registered users
+    const registeredUsers = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+    const userIndex = registeredUsers.findIndex((u: any) => u.id === patient.id);
+    if (userIndex !== -1) {
+      registeredUsers[userIndex].healthRecords = records;
+      localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers));
+    }
+
+    // Create notification for Dr. Rajesh
+    const notifications = JSON.parse(localStorage.getItem('doctorNotifications') || '[]');
+    const newNotification = {
+      id: Date.now().toString(),
+      patientId: patient.id,
+      patientName: patient.name,
+      message: `New health record added`,
+      type: 'health_update',
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    notifications.push(newNotification);
+    localStorage.setItem('doctorNotifications', JSON.stringify(notifications));
+  };
+  const handleSubmitRecord = async () => {
+    setIsSubmitting(true);
+    
+    let recordData: any;
+    
+    switch (recordType) {
+      case 'blood_pressure':
+        recordData = {
+          systolic: parseInt(bloodPressureForm.systolic),
+          diastolic: parseInt(bloodPressureForm.diastolic),
+          heartRate: parseInt(bloodPressureForm.heartRate),
+          notes: bloodPressureForm.notes
+        };
+        break;
+      case 'sugar_level':
+        recordData = {
+          level: parseFloat(sugarLevelForm.level),
+          testType: sugarLevelForm.testType,
+          notes: sugarLevelForm.notes
+        };
+        break;
+      case 'baby_movement':
+        recordData = {
+          count: parseInt(babyMovementForm.count),
+          duration: parseInt(babyMovementForm.duration),
+          notes: babyMovementForm.notes
+        };
+        break;
+      case 'weekly_update':
+        recordData = {
+          weight: parseFloat(weeklyUpdateForm.weight),
+          symptoms: weeklyUpdateForm.symptoms,
+          mood: weeklyUpdateForm.mood,
+          notes: weeklyUpdateForm.notes
+        };
+        break;
+    }
+
+    const newRecord: HealthRecord = {
+      id: Date.now().toString(),
+      patientId: patient.id,
+      date: new Date().toISOString(),
+      type: recordType,
+      data: recordData
+    };
+
+    const updatedRecords = [...healthRecords, newRecord];
+    setHealthRecords(updatedRecords);
+    saveHealthRecords(updatedRecords);
+
+    // Reset forms
+    setBloodPressureForm({ systolic: '', diastolic: '', heartRate: '', notes: '' });
+    setSugarLevelForm({ level: '', testType: 'fasting', notes: '' });
+    setBabyMovementForm({ count: '', duration: '', notes: '' });
+    setWeeklyUpdateForm({ weight: '', symptoms: [], mood: 5, notes: '' });
+    
+    setShowAddRecord(false);
+    setIsSubmitting(false);
+  };
+
+  const getLatestRecord = (type: string) => {
+    return healthRecords
+      .filter(record => record.type === type)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  };
   const features = [
     {
       id: 'blood-pressure',
@@ -305,11 +328,16 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ patient }) => {
     });
   };
 
-  const renderOverview = () => (
+  const renderOverview = () => {
+     const weeksRemaining = calculateWeeksRemaining();
+    const latestBP = getLatestRecord('blood_pressure');
+    const latestSugar = getLatestRecord('sugar_level');
+    const latestMovement = getLatestRecord('baby_movement');
+    return (
     <div className="space-y-6">
       {/* Pregnancy Progress */}
       <div className="bg-gradient-to-r from-pink-500 to-purple-600 rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold mb-2">Pregnancy Progress</h3>
             <p className="text-pink-100">Week {patient.currentWeek || 0} of 40</p>
@@ -343,7 +371,216 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ patient }) => {
           </div>
         ))}
       </div>
+       {/* Recent Records */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Recent Health Records</h3>
+            <button
+              onClick={() => setActiveTab('records')}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              View all
+            </button>
+          </div>
+          
+          {healthRecords.length > 0 ? (
+            <div className="space-y-3">
+              {healthRecords
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .slice(0, 3)
+                .map((record) => (
+                  <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        record.type === 'blood_pressure' ? 'bg-red-100' :
+                        record.type === 'sugar_level' ? 'bg-blue-100' :
+                        record.type === 'baby_movement' ? 'bg-green-100' :
+                        'bg-purple-100'
+                      }`}>
+                        {record.type === 'blood_pressure' && <Activity className="w-4 h-4 text-red-600" />}
+                        {record.type === 'sugar_level' && <Droplets className="w-4 h-4 text-blue-600" />}
+                        {record.type === 'baby_movement' && <Zap className="w-4 h-4 text-green-600" />}
+                        {record.type === 'weekly_update' && <Weight className="w-4 h-4 text-purple-600" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800 capitalize">
+                          {record.type.replace('_', ' ')}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {new Date(record.date).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-800">
+                        {record.type === 'blood_pressure' && `${record.data.systolic}/${record.data.diastolic}`}
+                        {record.type === 'sugar_level' && `${record.data.level} mg/dL`}
+                        {record.type === 'baby_movement' && `${record.data.count} kicks`}
+                        {record.type === 'weekly_update' && `${record.data.weight} kg`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Activity className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 mb-4">No health records yet</p>
+              <button
+                onClick={() => {
+                  setShowAddRecord(true);
+                  setActiveTab('records');
+                }}
+                className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                Add Your First Record
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
+  const renderRecords = () => (
+    <div className="space-y-6">
+      {/* Add Record Button */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-800">Health Records</h2>
+        <button
+          onClick={() => setShowAddRecord(true)}
+          className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Add Record</span>
+        </button>
+      </div>
+
+      {/* Records List */}
+      <div className="grid grid-cols-1 gap-4">
+        {healthRecords
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .map((record) => (
+            <div key={record.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    record.type === 'blood_pressure' ? 'bg-red-100' :
+                    record.type === 'sugar_level' ? 'bg-blue-100' :
+                    record.type === 'baby_movement' ? 'bg-green-100' :
+                    'bg-purple-100'
+                  }`}>
+                    {record.type === 'blood_pressure' && <Activity className="w-5 h-5 text-red-600" />}
+                    {record.type === 'sugar_level' && <Droplets className="w-5 h-5 text-blue-600" />}
+                    {record.type === 'baby_movement' && <Zap className="w-5 h-5 text-green-600" />}
+                    {record.type === 'weekly_update' && <Weight className="w-5 h-5 text-purple-600" />}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 capitalize">
+                      {record.type.replace('_', ' ')}
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      {new Date(record.date).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {record.type === 'blood_pressure' && (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-500">Systolic</p>
+                      <p className="font-semibold">{record.data.systolic} mmHg</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Diastolic</p>
+                      <p className="font-semibold">{record.data.diastolic} mmHg</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Heart Rate</p>
+                      <p className="font-semibold">{record.data.heartRate} bpm</p>
+                    </div>
+                  </>
+                )}
+                
+                {record.type === 'sugar_level' && (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-500">Level</p>
+                      <p className="font-semibold">{record.data.level} mg/dL</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Test Type</p>
+                      <p className="font-semibold capitalize">{record.data.testType.replace('_', ' ')}</p>
+                    </div>
+                  </>
+                )}
+                
+                {record.type === 'baby_movement' && (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-500">Kick Count</p>
+                      <p className="font-semibold">{record.data.count}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Duration</p>
+                      <p className="font-semibold">{record.data.duration} min</p>
+                    </div>
+                  </>
+                )}
+                
+                {record.type === 'weekly_update' && (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-500">Weight</p>
+                      <p className="font-semibold">{record.data.weight} kg</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Mood</p>
+                      <p className="font-semibold">{record.data.mood}/10</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {record.data.notes && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 mb-1">Notes</p>
+                  <p className="text-sm text-gray-700">{record.data.notes}</p>
+                </div>
+              )}
+            </div>
+          ))}
+      </div>
+
+      {healthRecords.length === 0 && (
+        <div className="text-center py-12">
+          <Activity className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">No health records yet</h3>
+          <p className="text-gray-600 mb-6">Start tracking your health by adding your first record</p>
+          <button
+            onClick={() => setShowAddRecord(true)}
+            className="bg-pink-500 hover:bg-pink-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            Add Your First Record
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderAddRecordForm = () => (
+    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-semibold text-gray-800">Add Health Record</h3>
+        <button
+          onClick={() => setShowAddRecord(false)}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <X className="w-5 h-5 text-gray-500" />
+        </button>
+      </div>
       {/* Recent Activity */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
@@ -508,6 +745,82 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ patient }) => {
         </div>
         
         {showAddForm && renderBloodPressureForm()}
+         {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <Activity className="w-5 h-5 text-red-600" />
+              </div>
+              <span className="text-xs text-gray-500">Latest</span>
+            </div>
+            <h4 className="font-semibold text-gray-800 mb-1">Blood Pressure</h4>
+            {latestBP ? (
+              <p className="text-lg font-bold text-gray-900">
+                {latestBP.data.systolic}/{latestBP.data.diastolic}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500">No records yet</p>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Droplets className="w-5 h-5 text-blue-600" />
+              </div>
+              <span className="text-xs text-gray-500">Latest</span>
+            </div>
+            <h4 className="font-semibold text-gray-800 mb-1">Sugar Level</h4>
+            {latestSugar ? (
+              <p className="text-lg font-bold text-gray-900">
+                {latestSugar.data.level} mg/dL
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500">No records yet</p>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Zap className="w-5 h-5 text-green-600" />
+              </div>
+              <span className="text-xs text-gray-500">Latest</span>
+            </div>
+            <h4 className="font-semibold text-gray-800 mb-1">Baby Movements</h4>
+            {latestMovement ? (
+              <p className="text-lg font-bold text-gray-900">
+                {latestMovement.data.count} kicks
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500">No records yet</p>
+            )}
+          </div>
+        </div>
+        
+        {/* Doctor Information */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Your Healthcare Team</h3>
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+              DR
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-gray-800">Dr. Rajesh</p>
+              <p className="text-sm text-gray-600">Obstetrician & Gynecologist</p>
+              <p className="text-xs text-gray-500">Your assigned doctor</p>
+            </div>
+            <div className="flex space-x-2">
+              <button className="p-2 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors">
+                <Phone className="w-4 h-4 text-blue-600" />
+              </button>
+              <button className="p-2 bg-green-100 hover:bg-green-200 rounded-lg transition-colors">
+                <MessageSquare className="w-4 h-4 text-green-600" />
+              </button>
+            </div>
+          </div>
+        </div>
         
         {/* Statistics Cards */}
         {records.length > 0 && (
