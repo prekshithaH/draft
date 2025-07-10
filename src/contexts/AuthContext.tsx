@@ -107,6 +107,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newUser.profileCompleted = true; // Doctors don't need profile completion
     }
 
+    // Auto-assign Dr. Rajesh to all new patients
+    if (role === 'patient') {
+      newUser.doctorId = 'dr_rajesh';
+      newUser.doctorName = 'Dr. Rajesh';
+    }
+
     // Save to registered users
     existingUsers.push(newUser);
     localStorage.setItem('registeredUsers', JSON.stringify(existingUsers));
