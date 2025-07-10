@@ -4,7 +4,7 @@ import {
   Droplets, 
   Baby,
   Edit3,
-  Zap
+  Zap,
   ChefHat, 
   Phone, 
   MessageCircle, 
